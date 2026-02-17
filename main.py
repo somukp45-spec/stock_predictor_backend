@@ -1,42 +1,29 @@
-import os
 import requests
 from fastapi import FastAPI, Query
 
 app = FastAPI()
 
-API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
-
 @app.get("/")
 def root():
-    return {"status": "API running"}
+    return {"status": "India Stock API running"}
 
 @app.get("/predict")
-def predict(symbol: str = Query(..., example="RELIANCE.BSE")):
-    if not API_KEY:
-        return {"error": "API key missing"}
+def predict(symbol: str = Query(..., example="RELIANCE.NS")):
+    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
 
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "GLOBAL_QUOTE",
-        "symbol": symbol,
-        "apikey": API_KEY
-    }
-
-    r = requests.get(url, params=params, timeout=10)
-
-    if r.status_code != 200:
-        return {"error": "Alpha Vantage request failed"}
-
+    r = requests.get(url, timeout=10)
     data = r.json()
 
-    if "Global Quote" not in data:
-        return {"error": "Invalid symbol or API limit reached"}
+    result = data["quoteResponse"]["result"]
 
-    quote = data["Global Quote"]
+    if not result:
+        return {"error": "Invalid symbol"}
+
+    stock = result[0]
 
     return {
         "symbol": symbol,
-        "price": quote.get("05. price"),
-        "change": quote.get("09. change"),
-        "change_percent": quote.get("10. change percent")
+        "price": stock.get("regularMarketPrice"),
+        "change": stock.get("regularMarketChange"),
+        "change_percent": stock.get("regularMarketChangePercent")
     }
