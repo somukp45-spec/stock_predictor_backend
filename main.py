@@ -1,40 +1,42 @@
-from fastapi import FastAPI
+import os
 import requests
-import csv
-from io import StringIO
+from fastapi import FastAPI, Query
 
 app = FastAPI()
 
+API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+
 @app.get("/")
-def home():
-    return {"status": "Backend running"}
+def root():
+    return {"status": "API running"}
 
 @app.get("/predict")
-def predict(symbol: str):
-    try:
-        # Stooq uses lowercase symbols
-        sym = symbol.lower()
+def predict(symbol: str = Query(..., example="RELIANCE.BSE")):
+    if not API_KEY:
+        return {"error": "API key missing"}
 
-        url = f"https://stooq.com/q/d/l/?s={sym}&i=d"
-        r = requests.get(url, timeout=10)
+    url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "GLOBAL_QUOTE",
+        "symbol": symbol,
+        "apikey": API_KEY
+    }
 
-        if r.status_code != 200 or len(r.text) < 50:
-            return {"error": "Data not available"}
+    r = requests.get(url, params=params, timeout=10)
 
-        f = StringIO(r.text)
-        reader = list(csv.reader(f))
+    if r.status_code != 200:
+        return {"error": "Alpha Vantage request failed"}
 
-        # Last 2 closing prices
-        last_close = float(reader[-1][4])
-        prev_close = float(reader[-2][4])
+    data = r.json()
 
-        prediction = "UP" if last_close > prev_close else "DOWN"
+    if "Global Quote" not in data:
+        return {"error": "Invalid symbol or API limit reached"}
 
-        return {
-            "symbol": symbol.upper(),
-            "last_price": last_close,
-            "prediction": prediction
-        }
+    quote = data["Global Quote"]
 
-    except Exception as e:
-        return {"error": "Invalid symbol"}
+    return {
+        "symbol": symbol,
+        "price": quote.get("05. price"),
+        "change": quote.get("09. change"),
+        "change_percent": quote.get("10. change percent")
+    }
