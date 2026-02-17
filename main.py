@@ -1,48 +1,50 @@
-import requests
 from fastapi import FastAPI, Query
+import requests
 
 app = FastAPI()
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Accept": "application/json"
-}
+API_KEY = "3PPXJ0AQE10FJX74"  # your Alpha Vantage key
 
 @app.get("/")
 def root():
     return {"status": "India Stock API running"}
 
 @app.get("/predict")
-def predict(symbol: str = Query(...)):
-    try:
-        url = "https://query1.finance.yahoo.com/v7/finance/quote"
-        params = {"symbols": symbol}
+def predict(symbol: str = Query(..., example="RELIANCE.NSE")):
+    url = "https://www.alphavantage.co/query"
 
-        r = requests.get(url, params=params, headers=HEADERS, timeout=10)
+    params = {
+        "function": "TIME_SERIES_DAILY",
+        "symbol": symbol,
+        "apikey": API_KEY
+    }
 
-        # 🔐 Yahoo protection check
-        if r.status_code != 200 or not r.text.strip():
-            return {
-                "error": "Yahoo blocked request",
-                "status_code": r.status_code
-            }
+    r = requests.get(url, params=params, timeout=15)
 
-        data = r.json()
+    # 🔒 SAFETY CHECK
+    if r.status_code != 200 or not r.text:
+        return {"error": "Alpha Vantage request failed"}
 
-        result = data.get("quoteResponse", {}).get("result", [])
+    data = r.json()
 
-        if not result:
-            return {"error": "Invalid Indian stock symbol"}
+    if "Time Series (Daily)" not in data:
+        return {"error": "Invalid symbol or API limit reached"}
 
-        stock = result[0]
+    series = data["Time Series (Daily)"]
+    dates = list(series.keys())
 
-        return {
-            "symbol": symbol,
-            "price": stock.get("regularMarketPrice"),
-            "change": stock.get("regularMarketChange"),
-            "change_percent": stock.get("regularMarketChangePercent"),
-            "exchange": stock.get("fullExchangeName")
-        }
+    latest = series[dates[0]]
+    prev = series[dates[1]]
 
-    except Exception as e:
-        return {"error": str(e)}
+    close_today = float(latest["4. close"])
+    close_prev = float(prev["4. close"])
+
+    trend = "UP" if close_today > close_prev else "DOWN"
+    confidence = round(abs(close_today - close_prev) / close_prev * 100, 2)
+
+    return {
+        "symbol": symbol,
+        "trend": trend,
+        "confidence": confidence,
+        "source": "Alpha Vantage (NSE)"
+    }
