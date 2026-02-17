@@ -14,7 +14,7 @@ def predict(symbol: str = Query(..., example="RELIANCE.NS")):
     r = requests.get(url, timeout=10)
     data = r.json()
 
-    result = data["quoteResponse"]["result"]
+    result = data.get("quoteResponse", {}).get("result", [])
 
     if not result:
         return {"error": "Invalid symbol"}
