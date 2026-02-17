@@ -1,43 +1,39 @@
-from fastapi import FastAPI
 import requests
+from fastapi import FastAPI
 
 app = FastAPI()
 
+API_KEY = "PASTE_YOUR_ALPHA_VANTAGE_KEY_HERE"
+
 @app.get("/")
-def home():
+def root():
     return {"status": "India Stock API running"}
 
 @app.get("/predict")
 def predict(symbol: str):
-    try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-        r = requests.get(url, timeout=5)
+    url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "TIME_SERIES_DAILY",
+        "symbol": symbol,
+        "apikey": API_KEY
+    }
 
-        # If Yahoo blocks or returns empty
-        if r.status_code != 200 or not r.text:
-            raise Exception("API blocked")
+    r = requests.get(url, params=params, timeout=10)
+    data = r.json()
 
-        data = r.json()
+    if "Time Series (Daily)" not in data:
+        return {"error": "API limit reached or invalid symbol"}
 
-        result = data["chart"]["result"]
-        if not result:
-            raise Exception("No data")
+    latest_day = list(data["Time Series (Daily)"].keys())[0]
+    latest = data["Time Series (Daily)"][latest_day]
 
-        price = result[0]["meta"]["regularMarketPrice"]
+    open_price = float(latest["1. open"])
+    close_price = float(latest["4. close"])
 
-        return {
-            "symbol": symbol,
-            "price": price,
-            "trend": "LIVE",
-            "source": "Yahoo Finance"
-        }
-
-    except Exception as e:
-        # ✅ DEMO / FALLBACK RESPONSE
-        return {
-            "symbol": symbol,
-            "price": 2950,
-            "trend": "SIDEWAYS",
-            "confidence": "Demo data (API limit reached)",
-            "note": "Yahoo blocks free API calls"
-        }
+    return {
+        "symbol": symbol,
+        "date": latest_day,
+        "open": open_price,
+        "close": close_price,
+        "prediction": "UP" if close_price > open_price else "DOWN"
+    }
